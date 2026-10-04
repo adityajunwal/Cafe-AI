@@ -8,6 +8,7 @@ from app.modules.auth_tenancy.dependencies import get_current_user, get_customer
 from app.modules.auth_tenancy.models import (
     CustomerSessionInfo,
     CustomerSessionResponse,
+    OwnerRegisterRequest,
     StaffUserCreate,
     StaffUserResponse,
     TokenResponse,
@@ -35,9 +36,97 @@ class SessionCreateRequest(BaseModel):
     qr_token: str
 
 
+import re
+
 class WSTicketResponse(BaseModel):
     ticket: str
     expires_in_seconds: int = 60
+
+
+@router.post("/auth/register-owner", response_model=TokenResponse)
+async def register_owner(data: OwnerRegisterRequest, db=Depends(get_database)):
+    """
+    Onboards and registers a new Cafe Owner.
+    Atomically creates the Cafe, default Table 1, and the Owner account, returning an immediate JWT token.
+    """
+    clean_email = data.email.lower().strip()
+    existing_user = await db.staff_users.find_one({"email": clean_email})
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email address already exists",
+        )
+
+    cafe_repo = CafeRepository(db)
+    table_repo = TableRepository(db)
+
+    # Generate unique slug
+    raw_slug = data.cafe_slug or data.cafe_name
+    base_slug = re.sub(r"[^a-z0-9]+", "-", raw_slug.lower()).strip("-") or "cafe"
+    slug = base_slug
+    counter = 1
+    while await cafe_repo.get_by_slug(slug):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    now = datetime.now(timezone.utc)
+    cafe_doc = {
+        "name": data.cafe_name.strip(),
+        "slug": slug,
+        "upi_id": (data.upi_id or "cafe@upi").strip(),
+        "payment_mode": "pay_now",
+        "upsell_level": "normal",
+        "tax_config": {
+            "gst_enabled": False,
+            "gst_rate_percent": 5.0,
+            "service_charge_percent": 0.0,
+            "is_composition_scheme": False,
+        },
+        "auto_expire_unpaid_minutes": 15,
+        "phone": data.phone,
+        "address": data.address,
+        "currency": "INR",
+        "created_at": now,
+        "updated_at": now,
+    }
+    cafe_id = await cafe_repo.create(cafe_doc)
+
+    # Create Table 1 with pre-signed QR token
+    await table_repo.create_table(cafe_id, {
+        "number": "1",
+        "name": "Table 1",
+        "capacity": 4,
+        "is_active": True,
+    })
+
+    # Create Owner in staff_users collection
+    owner_user = {
+        "email": clean_email,
+        "name": data.name.strip(),
+        "hashed_password": hash_password(data.password),
+        "role": UserRole.OWNER.value,
+        "cafe_id": cafe_id,
+        "phone": data.phone,
+        "is_active": True,
+        "created_at": now,
+    }
+    result = await db.staff_users.insert_one(owner_user)
+    owner_id = str(result.inserted_id)
+
+    token = create_access_token({
+        "sub": owner_id,
+        "email": clean_email,
+        "name": data.name.strip(),
+        "role": UserRole.OWNER.value,
+        "cafe_id": cafe_id,
+    })
+
+    return TokenResponse(
+        access_token=token,
+        role=UserRole.OWNER,
+        cafe_id=cafe_id,
+        name=data.name.strip(),
+    )
 
 
 @router.post("/auth/login", response_model=TokenResponse)

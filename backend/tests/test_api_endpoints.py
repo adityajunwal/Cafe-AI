@@ -77,3 +77,46 @@ async def test_full_api_ordering_journey(async_db, cafe_a_id):
 
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_owner_registration_flow(async_db):
+    app.dependency_overrides[get_database] = lambda: async_db
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            payload = {
+                "name": "Priya Sharma",
+                "email": "priya@roastery.com",
+                "password": "secretpassword123",
+                "phone": "9876543210",
+                "cafe_name": "Mountain Roastery",
+                "upi_id": "roastery@upi",
+                "address": "MG Road, Pune",
+            }
+            res = await client.post("/v1/auth/register-owner", json=payload)
+            assert res.status_code == 200
+            data = res.json()
+
+            assert data["role"] == "owner"
+            assert data["name"] == "Priya Sharma"
+            assert "access_token" in data
+            assert len(data["cafe_id"]) > 0
+
+            # Duplicate email registration must be rejected
+            res_dup = await client.post("/v1/auth/register-owner", json=payload)
+            assert res_dup.status_code == 400
+            assert "already exists" in res_dup.json()["detail"]
+
+            # Owner can log in with registered credentials
+            login_res = await client.post("/v1/auth/login", json={
+                "email": "priya@roastery.com",
+                "password": "secretpassword123",
+            })
+            assert login_res.status_code == 200
+            assert login_res.json()["role"] == "owner"
+
+    finally:
+        app.dependency_overrides.clear()
+

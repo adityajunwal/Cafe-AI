@@ -26,6 +26,18 @@ class StaffUserCreate(BaseModel):
     cafe_id: str
 
 
+class OwnerRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, description="Password (at least 6 characters)")
+    name: str = Field(description="Owner full name")
+    phone: Optional[str] = None
+    cafe_name: str = Field(description="Name of the cafe")
+    cafe_slug: Optional[str] = None
+    upi_id: Optional[str] = Field(default="cafe@upi", description="Cafe UPI ID for manual payments")
+    address: Optional[str] = None
+
+
+
 class StaffUserResponse(BaseModel):
     id: str
     email: EmailStr

@@ -55,15 +55,22 @@ class LLMClient:
                 # Accumulate tool calls
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
-                        idx = tc.index
+                        idx = tc.index if tc.index is not None else 0
                         if idx not in current_tool_calls:
                             current_tool_calls[idx] = {
                                 "id": tc.id or f"call_{idx}",
                                 "name": tc.function.name if tc.function and tc.function.name else "",
                                 "arguments": "",
+                                "extra_content": None,
                             }
+                        if tc.id and not current_tool_calls[idx]["id"]:
+                            current_tool_calls[idx]["id"] = tc.id
+                        if tc.function and tc.function.name:
+                            current_tool_calls[idx]["name"] = tc.function.name
                         if tc.function and tc.function.arguments:
                             current_tool_calls[idx]["arguments"] += tc.function.arguments
+                        if hasattr(tc, "extra_content") and tc.extra_content:
+                            current_tool_calls[idx]["extra_content"] = tc.extra_content
 
             # Yield accumulated complete tool calls if any
             for idx, tc_data in current_tool_calls.items():
@@ -79,6 +86,7 @@ class LLMClient:
                     "id": tc_data["id"],
                     "name": tc_data["name"],
                     "arguments": parsed_args,
+                    "extra_content": tc_data.get("extra_content"),
                 }
 
             yield {"type": "finish"}

@@ -43,5 +43,10 @@ def setup_logging(debug: bool = False) -> None:
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
+    # Mute noisy internal driver debug heartbeats
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
+    logging.getLogger("motor").setLevel(logging.WARNING)
+
+
 
 logger = logging.getLogger("cafe_ai_waiter")

@@ -158,15 +158,19 @@ RULES YOU MUST ALWAYS FOLLOW:
                             }),
                         }
 
-                # Append tool result to conversation history
+                # Append tool result to conversation history, preserving Gemini thought_signature
+                tool_call_obj: Dict[str, Any] = {
+                    "id": t_id,
+                    "type": "function",
+                    "function": {"name": t_name, "arguments": json.dumps(t_args)},
+                }
+                if tc.get("extra_content"):
+                    tool_call_obj["extra_content"] = tc["extra_content"]
+
                 conversation.append({
                     "role": "assistant",
                     "content": None,
-                    "tool_calls": [{
-                        "id": t_id,
-                        "type": "function",
-                        "function": {"name": t_name, "arguments": json.dumps(t_args)},
-                    }],
+                    "tool_calls": [tool_call_obj],
                 })
                 conversation.append({
                     "role": "tool",
