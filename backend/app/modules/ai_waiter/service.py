@@ -128,7 +128,25 @@ RULES YOU MUST ALWAYS FOLLOW:
             if not has_tool_call:
                 break
 
-            # Execute tool calls and feed results back to the model
+            # Build single assistant message with all executed tool calls (Gemini/OpenAI compliant)
+            assistant_tool_calls: List[Dict[str, Any]] = []
+            for tc in pending_tool_calls:
+                tool_call_obj: Dict[str, Any] = {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"])},
+                }
+                if tc.get("extra_content"):
+                    tool_call_obj["extra_content"] = tc["extra_content"]
+                assistant_tool_calls.append(tool_call_obj)
+
+            conversation.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": assistant_tool_calls,
+            })
+
+            # Execute tool calls and feed results back to conversation
             for tc in pending_tool_calls:
                 t_name = tc["name"]
                 t_args = tc["arguments"]
@@ -158,20 +176,6 @@ RULES YOU MUST ALWAYS FOLLOW:
                             }),
                         }
 
-                # Append tool result to conversation history, preserving Gemini thought_signature
-                tool_call_obj: Dict[str, Any] = {
-                    "id": t_id,
-                    "type": "function",
-                    "function": {"name": t_name, "arguments": json.dumps(t_args)},
-                }
-                if tc.get("extra_content"):
-                    tool_call_obj["extra_content"] = tc["extra_content"]
-
-                conversation.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [tool_call_obj],
-                })
                 conversation.append({
                     "role": "tool",
                     "tool_call_id": t_id,
