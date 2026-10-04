@@ -10,6 +10,7 @@ from app.modules.auth_tenancy.router import router as auth_router
 from app.modules.bills.router import router as bills_router
 from app.modules.cafes.router import router as cafes_router
 from app.modules.cart.router import router as cart_router
+from app.modules.customers.router import router as customers_router
 from app.modules.menu.router import router as menu_router
 from app.modules.orders.router import router as orders_router
 from app.modules.realtime.router import router as realtime_router
@@ -68,6 +69,7 @@ app.include_router(auth_router)
 app.include_router(cafes_router)
 app.include_router(menu_router)
 app.include_router(cart_router)
+app.include_router(customers_router)
 app.include_router(orders_router)
 app.include_router(bills_router)
 app.include_router(ai_waiter_router)
